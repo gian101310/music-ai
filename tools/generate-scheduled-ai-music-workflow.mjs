@@ -367,7 +367,8 @@ const environments = [
   'dark studio with red and blue neon haze'
 ];
 return items.map(item => {
-  const idx = Math.abs([...item.json.run_id].reduce((a, c) => a + c.charCodeAt(0), 0)) % environments.length;
+  const runIdText = String(item.json.run_id || Date.now());
+  const idx = Math.abs([...runIdText].reduce((a, c) => a + c.charCodeAt(0), 0)) % environments.length;
   const withEnv = { ...item.json, cover_environment: environments[idx] };
   const body = {
     model: item.json.openai_text_model,
