@@ -1,0 +1,36 @@
+services:
+  - type: web
+    name: scheduled-ai-music-n8n
+    runtime: docker
+    plan: standard
+    disk:
+      name: scheduled-ai-music-data
+      mountPath: /data
+      sizeGB: 10
+    envVars:
+      - key: PORT
+        value: "5678"
+      - key: N8N_USER_FOLDER
+        value: /data
+      - key: N8N_RUNNERS_BROKER_PORT
+        value: "5679"
+      - key: N8N_PROTOCOL
+        value: https
+      - key: N8N_HOST
+        value: 0.0.0.0
+      - key: GENERIC_TIMEZONE
+        value: Etc/UTC
+      - key: TZ
+        value: Etc/UTC
+      - key: NODE_FUNCTION_ALLOW_BUILTIN
+        value: fs,path,crypto
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: MUSICGPT_API_KEY
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: WEBHOOK_URL
+        sync: false

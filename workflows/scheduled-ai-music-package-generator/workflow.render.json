@@ -1,0 +1,955 @@
+{
+  "id": "scheduled-ai-music-package-generator",
+  "name": "Scheduled AI Music Package Generator",
+  "nodes": [
+    {
+      "id": "schedule",
+      "name": "Schedule Trigger - Daily",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        300
+      ],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "days",
+              "triggerAtHour": 9
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "config",
+      "name": "Config",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        240,
+        300
+      ],
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "genre",
+              "name": "genre",
+              "value": "brazilian dark phonk alt r&B",
+              "type": "string"
+            },
+            {
+              "id": "singer_gender",
+              "name": "singer_gender",
+              "value": "male",
+              "type": "string"
+            },
+            {
+              "id": "main_character",
+              "name": "main_character",
+              "value": "mysterious young male artist",
+              "type": "string"
+            },
+            {
+              "id": "output_base_path",
+              "name": "output_base_path",
+              "value": "/data/ai-music-output",
+              "type": "string"
+            },
+            {
+              "id": "google_sheet_id",
+              "name": "google_sheet_id",
+              "value": "REPLACE_WITH_GOOGLE_SHEET_ID",
+              "type": "string"
+            },
+            {
+              "id": "google_sheet_tab",
+              "name": "google_sheet_tab",
+              "value": "MusicJobs",
+              "type": "string"
+            },
+            {
+              "id": "use_supabase",
+              "name": "use_supabase",
+              "value": false,
+              "type": "boolean"
+            },
+            {
+              "id": "musicgpt_output_length",
+              "name": "musicgpt_output_length",
+              "value": 180,
+              "type": "number"
+            },
+            {
+              "id": "openai_text_model",
+              "name": "openai_text_model",
+              "value": "gpt-4.1-mini",
+              "type": "string"
+            },
+            {
+              "id": "openai_image_model",
+              "name": "openai_image_model",
+              "value": "gpt-image-1",
+              "type": "string"
+            },
+            {
+              "id": "duplicate_strategy",
+              "name": "duplicate_strategy",
+              "value": "append_version_suffix",
+              "type": "string"
+            },
+            {
+              "id": "max_retry_count",
+              "name": "max_retry_count",
+              "value": 3,
+              "type": "number"
+            },
+            {
+              "id": "musicgpt_api_key",
+              "name": "musicgpt_api_key",
+              "value": "={{ $env.MUSICGPT_API_KEY }}",
+              "type": "string"
+            },
+            {
+              "id": "supabase_url",
+              "name": "supabase_url",
+              "value": "={{ $env.SUPABASE_URL }}",
+              "type": "string"
+            },
+            {
+              "id": "supabase_service_role_key",
+              "name": "supabase_service_role_key",
+              "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "init",
+      "name": "Initialize Run Metadata",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        500,
+        300
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "\nconst crypto = require('crypto');\nconst now = new Date();\nconst stamp = now.toISOString().replace(/[:.]/g, '-');\nconst shortId = crypto.randomBytes(4).toString('hex');\nreturn items.map(item => ({\n  json: {\n    ...item.json,\n    run_id: stamp + '_' + shortId,\n    created_at: now.toISOString(),\n    status: 'started',\n    errors: []\n  }\n}));\n"
+      }
+    },
+    {
+      "id": "musicBody",
+      "name": "Prepare OpenAI Music Package Request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        760,
+        300
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "\nreturn items.map(item => {\n  const body = {\n    model: item.json.openai_text_model,\n    messages: [\n      { role: 'system', content: 'You return exactly what the user asks for. No commentary outside the requested code block.' },\n      { role: 'user', content: `You are a professional AI music producer, songwriter, and viral YouTube strategist.\nYour goal is to create a HIGH-QUALITY AI song package for MusicGPT.\nINPUT:\nGenre: {{$json.genre}}\nSinger Gender: {{$json.singer_gender}}\nOUTPUT REQUIREMENTS:\nReturn EVERYTHING inside ONE clean code block so it is easy to copy.\nInside the code block, structure it EXACTLY like this:\nTRACK NAME:\n(Create a highly clickable, emotional, viral-ready title that matches the song and genre)\nMUSIC PROMPT:\n(Write ONE clean, well-written paragraph under 1500 characters. Do NOT use bullet points or lists. The paragraph must naturally include: genre and subgenre, emotional tone, tempo (BPM range), key instruments and sounds, melody style, drum/beat feel, vocal style, song structure, and overall atmosphere. It should read like a professional music direction brief, smooth and cohesive, not fragmented. Make it detailed but concise so it maximizes MusicGPT output quality.)\nLYRICS:\n(Write full original lyrics that:)\n- Match the genre and mood perfectly\n- Have strong emotional or viral appeal\n- Use simple, catchy, repeatable phrases\n- Include a clear chorus (VERY IMPORTANT)\n- Are structured like a real song:\n[Intro]\n[Verse 1]\n[Pre-Chorus]\n[Chorus]\n[Verse 2]\n[Bridge]\n[Final Chorus]\n- IMPORTANT: Final output must contain ONLY the lyrics text itself with NO section labels, NO brackets, and NO extra formatting--just clean, continuous lyrics.\nSTYLE RULES:\n- Avoid generic lyrics\n- Make it feel modern and viral (TikTok/YouTube style)\n- Focus on strong emotions (nostalgia, pain, motivation, mystery, etc.)\n- Keep it natural and not robotic\nIMPORTANT:\n- Everything must be optimized for viral AI music content\n- The track name MUST be attention-grabbing and clickable\n- The music prompt MUST be detailed enough for high-quality generation while staying under 1500 characters\n- The lyrics MUST feel like a real song people would replay\nREMEMBER:\nReturn everything inside ONE code block only.\nDo NOT add any extra text outside the code block` }\n    ],\n    temperature: 0.9\n  };\n  return { json: { ...item.json, openai_music_body: body } };\n});\n"
+      }
+    },
+    {
+      "id": "openAiMusic",
+      "name": "OpenAI - Generate Music Package",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        1020,
+        300
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/chat/completions",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "={{ \"Bearer \" + $env.OPENAI_API_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.openai_music_body) }}",
+        "options": {
+          "timeout": 60000
+        }
+      }
+    },
+    {
+      "id": "parseMusic",
+      "name": "Parse Music Package",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1280,
+        300
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "\nfunction stripFence(text) {\n  return String(text || '').trim().replace(/^\\`\\`\\`[a-zA-Z0-9_-]*\\s*/i, '').replace(/\\s*\\`\\`\\`$/i, '').trim();\n}\nfunction slugify(value) {\n  return String(value || 'untitled')\n    .normalize('NFKD').replace(/[\\u0300-\\u036f]/g, '')\n    .toLowerCase().replace(/[^a-z0-9]+/g, '-')\n    .replace(/^-+|-+$/g, '').slice(0, 80) || 'untitled';\n}\nreturn items.map(item => {\n  const content = item.json.choices?.[0]?.message?.content || item.json.output_text || '';\n  const full = stripFence(content);\n  const match = full.match(/TRACK NAME:\\s*([\\s\\S]*?)\\n\\s*MUSIC PROMPT:\\s*([\\s\\S]*?)\\n\\s*LYRICS:\\s*([\\s\\S]*)$/i);\n  if (!match) throw new Error('Parse Music Package failed: expected TRACK NAME, MUSIC PROMPT, and LYRICS sections.');\n  const track_name = match[1].trim();\n  const music_prompt = match[2].trim();\n  const lyrics = match[3].trim();\n  if (!track_name) throw new Error('Parse Music Package failed: track_name is empty.');\n  if (!music_prompt) throw new Error('Parse Music Package failed: music_prompt is empty.');\n  if (!lyrics) throw new Error('Parse Music Package failed: lyrics is empty.');\n  if (music_prompt.length > 1500) throw new Error('Parse Music Package failed: music_prompt exceeds 1500 characters.');\n  const previous = $('Prepare OpenAI Music Package Request').first().json;\n  return { json: { ...previous, track_name, track_slug: slugify(track_name), music_prompt, lyrics, full_music_package_text: full, status: 'prompt_generated' } };\n});\n"
+      }
+    },
+    {
+      "id": "folder",
+      "name": "Build Safe Folder Path",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1540,
+        300
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "\nconst fs = require('fs');\nconst path = require('path');\nfunction safeFolder(basePath, datePart, runId, slug) {\n  const root = path.resolve(basePath);\n  const baseName = datePart + '_' + runId + '_' + slug;\n  let candidate = path.join(root, baseName);\n  let version = 1;\n  while (fs.existsSync(candidate)) {\n    version += 1;\n    candidate = path.join(root, baseName + '_v' + version);\n  }\n  fs.mkdirSync(candidate, { recursive: true });\n  return { folder: candidate, duplicate_status: version === 1 ? 'unique' : 'folder_version_v' + version };\n}\nreturn items.map(item => {\n  const datePart = new Date(item.json.created_at).toISOString().slice(0, 10);\n  const result = safeFolder(item.json.output_base_path, datePart, item.json.run_id, item.json.track_slug);\n  return { json: { ...item.json, package_folder_path: result.folder, duplicate_status: result.duplicate_status } };\n});\n"
+      }
+    },
+    {
+      "id": "sheetsInitial",
+      "name": "Google Sheets - Append Initial Row",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        1800,
+        300
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ \"https://sheets.googleapis.com/v4/spreadsheets/\" + $json.google_sheet_id + \"/values/\" + encodeURIComponent($json.google_sheet_tab + \"!A:T\") + \":append?valueInputOption=RAW&insertDataOption=INSERT_ROWS\" }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleSheetsOAuth2Api",
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ values: [[\n    $json.run_id || '',\n    $json.created_at || '',\n    'prompt_generated',\n    $json.genre || '',\n    $json.singer_gender || '',\n    $json.main_character || '',\n    $json.track_name || '',\n    $json.track_slug || '',\n    $json.music_prompt || '',\n    $json.lyrics || '',\n    $json.srt_text || '',\n    $json.cover_prompt || '',\n    $json.musicgpt_task_id || '',\n    $json.conversion_id_1 || '',\n    $json.conversion_id_2 || '',\n    $json.cover_file_path || '',\n    ($json.audio_files && $json.audio_files[0]) || '',\n    ($json.audio_files && $json.audio_files[1]) || '',\n    $json.package_folder_path || '',\n    ($json.errors && $json.errors.join('; ')) || ''\n  ]] }) }}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      },
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "PLACEHOLDER",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "id": "saveText",
+      "name": "Save music_package.txt and lyrics.txt",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2060,
+        300
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "\nconst fs = require('fs');\nconst path = require('path');\nfunction safeWrite(folder, fileName, content) {\n  const ext = path.extname(fileName);\n  const stem = path.basename(fileName, ext);\n  let target = path.join(folder, fileName);\n  let index = 1;\n  while (fs.existsSync(target)) {\n    index += 1;\n    target = path.join(folder, stem + '_v' + index + ext);\n  }\n  fs.writeFileSync(target, content, 'utf8');\n  return target;\n}\nreturn items.map(item => {\n  const previous = $('Build Safe Folder Path').first().json;\n  const music_package_file = safeWrite(previous.package_folder_path, 'music_package.txt', previous.full_music_package_text);\n  const lyrics_file = safeWrite(previous.package_folder_path, 'lyrics.txt', previous.lyrics);\n  return { json: { ...previous, music_package_file, lyrics_file } };\n});\n"
+      }
+    },
+    {
+      "id": "srt",
+      "name": "Generate SRT",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2320,
+        300
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "\nfunction cleanLine(line) {\n  return String(line || '')\n    .replace(/^\\s*\\[[^\\]]+\\]\\s*$/g, '')\n    .replace(/^\\s*(intro|verse\\s*\\d*|pre-chorus|chorus|bridge|final chorus)\\s*:?\\s*$/i, '')\n    .trim();\n}\nfunction fmt(seconds) {\n  const ms = Math.max(0, Math.floor((seconds % 1) * 1000));\n  const total = Math.floor(seconds);\n  const h = String(Math.floor(total / 3600)).padStart(2, '0');\n  const m = String(Math.floor((total % 3600) / 60)).padStart(2, '0');\n  const s = String(total % 60).padStart(2, '0');\n  return h + ':' + m + ':' + s + ',' + String(ms).padStart(3, '0');\n}\nreturn items.map(item => {\n  const duration = Number(item.json.musicgpt_output_length || 180);\n  const lines = item.json.lyrics.split(/\\r?\\n/).map(cleanLine).filter(Boolean);\n  if (!lines.length) throw new Error('Generate SRT failed: no clean lyric lines found.');\n  const perLine = Math.max(1.8, duration / lines.length);\n  const srt = lines.map((line, idx) => {\n    const start = idx * perLine;\n    const end = Math.min(duration, start + perLine * 0.92);\n    return [String(idx + 1), fmt(start) + ' --> ' + fmt(end), line].join('\\n');\n  }).join('\\n\\n') + '\\n';\n  return { json: { ...item.json, srt_text: srt, status: 'srt_created' } };\n});\n"
+      }
+    },
+    {
+      "id": "saveSrt",
+      "name": "Save lyrics.srt",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2580,
+        300
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "\nconst fs = require('fs');\nconst path = require('path');\nfunction safeWrite(folder, fileName, content) {\n  const ext = path.extname(fileName);\n  const stem = path.basename(fileName, ext);\n  let target = path.join(folder, fileName);\n  let index = 1;\n  while (fs.existsSync(target)) {\n    index += 1;\n    target = path.join(folder, stem + '_v' + index + ext);\n  }\n  fs.writeFileSync(target, content, 'utf8');\n  return target;\n}\nreturn items.map(item => ({ json: { ...item.json, srt_file: safeWrite(item.json.package_folder_path, 'lyrics.srt', item.json.srt_text) } }));\n"
+      }
+    },
+    {
+      "id": "sheetsSrt",
+      "name": "Google Sheets - Append SRT Status",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        2840,
+        300
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ \"https://sheets.googleapis.com/v4/spreadsheets/\" + $json.google_sheet_id + \"/values/\" + encodeURIComponent($json.google_sheet_tab + \"!A:T\") + \":append?valueInputOption=RAW&insertDataOption=INSERT_ROWS\" }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleSheetsOAuth2Api",
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ values: [[\n    $json.run_id || '',\n    $json.created_at || '',\n    'srt_created',\n    $json.genre || '',\n    $json.singer_gender || '',\n    $json.main_character || '',\n    $json.track_name || '',\n    $json.track_slug || '',\n    $json.music_prompt || '',\n    $json.lyrics || '',\n    $json.srt_text || '',\n    $json.cover_prompt || '',\n    $json.musicgpt_task_id || '',\n    $json.conversion_id_1 || '',\n    $json.conversion_id_2 || '',\n    $json.cover_file_path || '',\n    ($json.audio_files && $json.audio_files[0]) || '',\n    ($json.audio_files && $json.audio_files[1]) || '',\n    $json.package_folder_path || '',\n    ($json.errors && $json.errors.join('; ')) || ''\n  ]] }) }}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      },
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "PLACEHOLDER",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "id": "supabaseSrt",
+      "name": "Optional Supabase - Insert SRT Asset",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3100,
+        300
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "\nreturn await Promise.all(items.map(async item => {\n  const data = item.json;\n  if (!data.use_supabase) return { json: data };\n  if (!data.supabase_url || !data.supabase_service_role_key) {\n    return { json: { ...data, errors: [...(data.errors || []), 'Supabase enabled but SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY is missing.'] } };\n  }\n  const response = await fetch(data.supabase_url.replace(/\\/$/, '') + '/rest/v1/music_assets', {\n    method: 'POST',\n    headers: {\n      apikey: data.supabase_service_role_key,\n      Authorization: 'Bearer ' + data.supabase_service_role_key,\n      'Content-Type': 'application/json',\n      Prefer: 'return=minimal'\n    },\n    body: JSON.stringify({\n      run_id: data.run_id,\n      track_name: data.track_name,\n      asset_type: 'lyrics_srt',\n      content_text: data.srt_text,\n      file_path: data.srt_file\n    })\n  });\n  if (!response.ok) {\n    return { json: { ...data, errors: [...(data.errors || []), 'Supabase SRT insert failed: HTTP ' + response.status] } };\n  }\n  return { json: data };\n}));\n"
+      }
+    },
+    {
+      "id": "coverBody",
+      "name": "Prepare OpenAI Cover Prompt Request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3360,
+        300
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "\nconst environments = [\n  'rainy neon favela street at night',\n  'foggy underground club exterior',\n  'empty coastal highway at blue hour',\n  'abandoned rooftop above Sao Paulo',\n  'dark studio with red and blue neon haze'\n];\nreturn items.map(item => {\n  const idx = Math.abs([...item.json.run_id].reduce((a, c) => a + c.charCodeAt(0), 0)) % environments.length;\n  const withEnv = { ...item.json, cover_environment: environments[idx] };\n  const body = {\n    model: item.json.openai_text_model,\n    messages: [\n      { role: 'system', content: 'You are a precise album cover prompt engineer. Return one code block only.' },\n      { role: 'user', content: `You are a professional album cover art director and AI image prompt engineer.\nYour goal is to create a HIGH-END text-to-image prompt for a music cover based on the song created by Music Creation Prompt\nIMPORTANT:\n- Analyze the previously generated TRACK NAME, MUSIC PROMPT, and LYRICS\n- Match the EXACT emotion, genre, and vibe of the song\n- The final result must feel like a real, professional music cover (not generic AI art)\nINPUT:\nMain Character: {{$json.main_character}}\nRotated Environment: {{$json.cover_environment}}\nTrack Name: {{$json.track_name}}\nMusic Prompt: {{$json.music_prompt}}\nLyrics: {{$json.lyrics}}\nOUTPUT REQUIREMENTS:\nReturn EVERYTHING inside ONE clean code block.\nInside the code block, write ONE highly detailed text-to-image prompt (no explanations).\nPROMPT RULES:\n- The cover must include ONE main character (male masculine early 20's) as the focal point\n- The character must visually reflect the emotion of the song (e.g. sad, lost, powerful, mysterious, etc.)\n- Match the GENRE visually (example: dark phonk alt r&B = city, cinematic sad = rainy/night/emotional, etc.)\n- Use cinematic lighting (neon glow, soft light, shadows, fog, etc.)\n- Include strong atmosphere using the rotated environment\n- Composition must be clean and intentionally offset: place the character slightly to the left or right side of the frame, leaving clear empty space on the opposite side for potential lyrics placement\n- Style must be ultra high quality, realistic or stylized cinematic (NOT cartoon unless genre fits)\n- Add depth of field, lens effects, and professional photography feel\n- Keep it SIMPLE but powerful (not cluttered)\nVISUAL QUALITY REQUIREMENTS:\n- 4K quality\n- ultra detailed\n- sharp focus\n- high contrast\n- professional album cover style\nOPTIONAL:\n- You may subtly include symbolic elements that match the lyrics theme\nIMPORTANT:\n- Do NOT include any text on the image\n- Do NOT explain anything\n- Output ONLY the final image prompt inside the code block` }\n    ],\n    temperature: 0.85\n  };\n  return { json: { ...withEnv, openai_cover_body: body } };\n});\n"
+      }
+    },
+    {
+      "id": "openAiCover",
+      "name": "OpenAI - Generate Cover Prompt",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        3620,
+        300
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/chat/completions",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "={{ \"Bearer \" + $env.OPENAI_API_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.openai_cover_body) }}",
+        "options": {
+          "timeout": 60000
+        }
+      }
+    },
+    {
+      "id": "parseCover",
+      "name": "Parse Cover Prompt",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3880,
+        300
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "\nfunction stripFence(text) {\n  return String(text || '').trim().replace(/^\\`\\`\\`[a-zA-Z0-9_-]*\\s*/i, '').replace(/\\s*\\`\\`\\`$/i, '').trim();\n}\nconst forbidden = /\\b(add|include|show|write|display|place)\\s+(visible\\s+)?(text|words|letters|title|logo|typography)\\b/i;\nreturn items.map(item => {\n  const previous = $('Prepare OpenAI Cover Prompt Request').first().json;\n  const content = item.json.choices?.[0]?.message?.content || item.json.output_text || '';\n  const cover_prompt = stripFence(content);\n  if (!cover_prompt) throw new Error('Parse Cover Prompt failed: cover prompt is empty.');\n  if (forbidden.test(cover_prompt)) throw new Error('Parse Cover Prompt failed: prompt appears to request visible text.');\n  return { json: { ...previous, cover_prompt, status: 'cover_prompt_generated' } };\n});\n"
+      }
+    },
+    {
+      "id": "saveCoverPrompt",
+      "name": "Save cover_prompt.txt",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4140,
+        300
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "\nconst fs = require('fs');\nconst path = require('path');\nfunction safeWrite(folder, fileName, content) {\n  const ext = path.extname(fileName);\n  const stem = path.basename(fileName, ext);\n  let target = path.join(folder, fileName);\n  let index = 1;\n  while (fs.existsSync(target)) {\n    index += 1;\n    target = path.join(folder, stem + '_v' + index + ext);\n  }\n  fs.writeFileSync(target, content, 'utf8');\n  return target;\n}\nreturn items.map(item => ({ json: { ...item.json, cover_prompt_file: safeWrite(item.json.package_folder_path, 'cover_prompt.txt', item.json.cover_prompt) } }));\n"
+      }
+    },
+    {
+      "id": "imageBody",
+      "name": "Prepare OpenAI Image Request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4400,
+        300
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "\nreturn items.map(item => {\n  const body = {\n    model: item.json.openai_image_model,\n    prompt: item.json.cover_prompt + '\\n\\nSquare 1:1 professional album cover, no text, no typography, no logo.',\n    size: '1024x1024',\n    quality: 'high',\n    n: 1\n  };\n  return { json: { ...item.json, openai_image_body: body } };\n});\n"
+      }
+    },
+    {
+      "id": "openAiImage",
+      "name": "OpenAI Image - Generate Cover Image",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        4660,
+        300
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/images/generations",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "={{ \"Bearer \" + $env.OPENAI_API_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.openai_image_body) }}",
+        "options": {
+          "timeout": 120000
+        }
+      }
+    },
+    {
+      "id": "saveImage",
+      "name": "Save Cover Image",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4920,
+        300
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "\nconst fs = require('fs');\nconst path = require('path');\nfunction safeBinary(folder, fileName, buffer) {\n  const ext = path.extname(fileName);\n  const stem = path.basename(fileName, ext);\n  let target = path.join(folder, fileName);\n  let index = 1;\n  while (fs.existsSync(target)) {\n    index += 1;\n    target = path.join(folder, stem + '_v' + index + ext);\n  }\n  fs.writeFileSync(target, buffer);\n  return target;\n}\nreturn items.map(item => {\n  const previous = $('Prepare OpenAI Image Request').first().json;\n  const b64 = item.json.data?.[0]?.b64_json;\n  if (!b64) throw new Error('Save Cover Image failed: OpenAI image response did not include b64_json.');\n  const cover_file_path = safeBinary(previous.package_folder_path, 'cover.png', Buffer.from(b64, 'base64'));\n  return { json: { ...previous, cover_file_path, status: 'cover_image_created' } };\n});\n"
+      }
+    },
+    {
+      "id": "musicgptStart",
+      "name": "MusicGPT - Start Music Generation",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        5180,
+        300
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.musicgpt.com/api/public/v1/MusicAI",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "={{ $json.musicgpt_api_key }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ prompt: $json.music_prompt, music_style: $json.genre, lyrics: $json.lyrics, make_instrumental: false, vocal_only: false, gender: $json.singer_gender, output_length: $json.musicgpt_output_length }) }}",
+        "options": {
+          "timeout": 180000
+        }
+      }
+    },
+    {
+      "id": "musicgptIds",
+      "name": "Store MusicGPT IDs",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        5440,
+        300
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "\nreturn items.map(item => {\n  const previous = $('Save Cover Image').first().json;\n  if (!item.json.success && !item.json.task_id) throw new Error('MusicGPT start failed: missing success/task_id in response.');\n  return { json: {\n    ...previous,\n    musicgpt_task_id: item.json.task_id || '',\n    conversion_id_1: item.json.conversion_id_1 || '',\n    conversion_id_2: item.json.conversion_id_2 || '',\n    musicgpt_eta: item.json.eta || null,\n    status: 'music_generation_started'\n  } };\n});\n"
+      }
+    },
+    {
+      "id": "sheetsMusicGpt",
+      "name": "Google Sheets - Append MusicGPT IDs",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        5700,
+        300
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ \"https://sheets.googleapis.com/v4/spreadsheets/\" + $json.google_sheet_id + \"/values/\" + encodeURIComponent($json.google_sheet_tab + \"!A:T\") + \":append?valueInputOption=RAW&insertDataOption=INSERT_ROWS\" }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleSheetsOAuth2Api",
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ values: [[\n    $json.run_id || '',\n    $json.created_at || '',\n    'music_generation_started',\n    $json.genre || '',\n    $json.singer_gender || '',\n    $json.main_character || '',\n    $json.track_name || '',\n    $json.track_slug || '',\n    $json.music_prompt || '',\n    $json.lyrics || '',\n    $json.srt_text || '',\n    $json.cover_prompt || '',\n    $json.musicgpt_task_id || '',\n    $json.conversion_id_1 || '',\n    $json.conversion_id_2 || '',\n    $json.cover_file_path || '',\n    ($json.audio_files && $json.audio_files[0]) || '',\n    ($json.audio_files && $json.audio_files[1]) || '',\n    $json.package_folder_path || '',\n    ($json.errors && $json.errors.join('; ')) || ''\n  ]] }) }}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      },
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "PLACEHOLDER",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "id": "pollDownload",
+      "name": "Poll MusicGPT and Download MP3s",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        5960,
+        300
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "\nconst fs = require('fs');\nconst path = require('path');\nconst sleep = ms => new Promise(resolve => setTimeout(resolve, ms));\nfunction safeBinary(folder, fileName, buffer) {\n  const ext = path.extname(fileName);\n  const stem = path.basename(fileName, ext);\n  let target = path.join(folder, fileName);\n  let index = 1;\n  while (fs.existsSync(target)) {\n    index += 1;\n    target = path.join(folder, stem + '_v' + index + ext);\n  }\n  fs.writeFileSync(target, buffer);\n  return target;\n}\nasync function pollConversion(data, conversionId, version) {\n  if (!conversionId) return null;\n  const max = Number(data.max_retry_count || 3);\n  let lastStatus = 'UNKNOWN';\n  for (let attempt = 1; attempt <= max; attempt++) {\n    if (attempt > 1) await sleep(60000);\n    const url = 'https://api.musicgpt.com/api/public/v1/byId?conversionType=MUSIC_AI&conversion_id=' + encodeURIComponent(conversionId);\n    const response = await fetch(url, { headers: { Authorization: data.musicgpt_api_key } });\n    if (!response.ok) {\n      lastStatus = 'HTTP ' + response.status;\n      continue;\n    }\n    const result = await response.json();\n    const conversion = result.conversion || result.data || result;\n    lastStatus = conversion.status || result.status || 'UNKNOWN';\n    const audioUrl = conversion.audio_url || conversion.conversion_path || conversion.conversion_url;\n    if (audioUrl && String(lastStatus).toUpperCase() === 'COMPLETED') {\n      const audioResponse = await fetch(audioUrl);\n      if (!audioResponse.ok) throw new Error('MusicGPT audio download failed for version ' + version + ': HTTP ' + audioResponse.status);\n      const buffer = Buffer.from(await audioResponse.arrayBuffer());\n      return safeBinary(data.package_folder_path, 'song_v' + version + '.mp3', buffer);\n    }\n  }\n  return { timeout: true, status: lastStatus };\n}\nreturn await Promise.all(items.map(async item => {\n  const data = $('Store MusicGPT IDs').first().json;\n  const audio_files = [];\n  const errors = [...(data.errors || [])];\n  const v1 = await pollConversion(data, data.conversion_id_1, 1);\n  const v2 = await pollConversion(data, data.conversion_id_2, 2);\n  for (const result of [v1, v2]) {\n    if (!result) continue;\n    if (typeof result === 'string') audio_files.push(result);\n    else if (result.timeout) errors.push('MusicGPT polling timed out with status: ' + result.status);\n  }\n  const status = audio_files.length ? 'music_downloaded' : 'music_timeout';\n  return { json: { ...data, audio_files, errors, status } };\n}));\n"
+      }
+    },
+    {
+      "id": "metadata",
+      "name": "Create metadata.json",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        6220,
+        300
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "\nreturn items.map(item => {\n  const data = item.json;\n  const metadata = {\n    run_id: data.run_id,\n    created_at: data.created_at,\n    genre: data.genre,\n    singer_gender: data.singer_gender,\n    main_character: data.main_character,\n    track_name: data.track_name,\n    track_slug: data.track_slug,\n    music_prompt: data.music_prompt,\n    lyrics: data.lyrics,\n    cover_prompt: data.cover_prompt,\n    musicgpt_task_id: data.musicgpt_task_id,\n    conversion_id_1: data.conversion_id_1,\n    conversion_id_2: data.conversion_id_2,\n    audio_files: data.audio_files || [],\n    cover_file: data.cover_file_path || '',\n    srt_file: data.srt_file || '',\n    local_folder: data.package_folder_path,\n    duplicate_status: data.duplicate_status,\n    status: (data.audio_files || []).length ? 'package_completed' : data.status,\n    errors: data.errors || []\n  };\n  return { json: { ...data, metadata, metadata_text: JSON.stringify(metadata, null, 2), status: metadata.status } };\n});\n"
+      }
+    },
+    {
+      "id": "saveMetadata",
+      "name": "Save metadata.json",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        6480,
+        300
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "\nconst fs = require('fs');\nconst path = require('path');\nfunction safeWrite(folder, fileName, content) {\n  const ext = path.extname(fileName);\n  const stem = path.basename(fileName, ext);\n  let target = path.join(folder, fileName);\n  let index = 1;\n  while (fs.existsSync(target)) {\n    index += 1;\n    target = path.join(folder, stem + '_v' + index + ext);\n  }\n  fs.writeFileSync(target, content, 'utf8');\n  return target;\n}\nreturn items.map(item => ({ json: { ...item.json, metadata_file: safeWrite(item.json.package_folder_path, 'metadata.json', item.json.metadata_text) } }));\n"
+      }
+    },
+    {
+      "id": "sheetsFinal",
+      "name": "Google Sheets - Final Update",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        6740,
+        300
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ \"https://sheets.googleapis.com/v4/spreadsheets/\" + $json.google_sheet_id + \"/values/\" + encodeURIComponent($json.google_sheet_tab + \"!A:T\") + \":append?valueInputOption=RAW&insertDataOption=INSERT_ROWS\" }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleSheetsOAuth2Api",
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ values: [[\n    $json.run_id || '',\n    $json.created_at || '',\n    $json.status || 'package_completed',\n    $json.genre || '',\n    $json.singer_gender || '',\n    $json.main_character || '',\n    $json.track_name || '',\n    $json.track_slug || '',\n    $json.music_prompt || '',\n    $json.lyrics || '',\n    $json.srt_text || '',\n    $json.cover_prompt || '',\n    $json.musicgpt_task_id || '',\n    $json.conversion_id_1 || '',\n    $json.conversion_id_2 || '',\n    $json.cover_file_path || '',\n    ($json.audio_files && $json.audio_files[0]) || '',\n    ($json.audio_files && $json.audio_files[1]) || '',\n    $json.package_folder_path || '',\n    ($json.errors && $json.errors.join('; ')) || ''\n  ]] }) }}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      },
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "PLACEHOLDER",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "id": "end",
+      "name": "End",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        7000,
+        300
+      ],
+      "parameters": {}
+    }
+  ],
+  "connections": {
+    "Schedule Trigger - Daily": {
+      "main": [
+        [
+          {
+            "node": "Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Config": {
+      "main": [
+        [
+          {
+            "node": "Initialize Run Metadata",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Initialize Run Metadata": {
+      "main": [
+        [
+          {
+            "node": "Prepare OpenAI Music Package Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare OpenAI Music Package Request": {
+      "main": [
+        [
+          {
+            "node": "OpenAI - Generate Music Package",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI - Generate Music Package": {
+      "main": [
+        [
+          {
+            "node": "Parse Music Package",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Music Package": {
+      "main": [
+        [
+          {
+            "node": "Build Safe Folder Path",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Safe Folder Path": {
+      "main": [
+        [
+          {
+            "node": "Google Sheets - Append Initial Row",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Sheets - Append Initial Row": {
+      "main": [
+        [
+          {
+            "node": "Save music_package.txt and lyrics.txt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save music_package.txt and lyrics.txt": {
+      "main": [
+        [
+          {
+            "node": "Generate SRT",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate SRT": {
+      "main": [
+        [
+          {
+            "node": "Save lyrics.srt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save lyrics.srt": {
+      "main": [
+        [
+          {
+            "node": "Google Sheets - Append SRT Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Sheets - Append SRT Status": {
+      "main": [
+        [
+          {
+            "node": "Optional Supabase - Insert SRT Asset",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Optional Supabase - Insert SRT Asset": {
+      "main": [
+        [
+          {
+            "node": "Prepare OpenAI Cover Prompt Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare OpenAI Cover Prompt Request": {
+      "main": [
+        [
+          {
+            "node": "OpenAI - Generate Cover Prompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI - Generate Cover Prompt": {
+      "main": [
+        [
+          {
+            "node": "Parse Cover Prompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Cover Prompt": {
+      "main": [
+        [
+          {
+            "node": "Save cover_prompt.txt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save cover_prompt.txt": {
+      "main": [
+        [
+          {
+            "node": "Prepare OpenAI Image Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare OpenAI Image Request": {
+      "main": [
+        [
+          {
+            "node": "OpenAI Image - Generate Cover Image",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Image - Generate Cover Image": {
+      "main": [
+        [
+          {
+            "node": "Save Cover Image",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save Cover Image": {
+      "main": [
+        [
+          {
+            "node": "MusicGPT - Start Music Generation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "MusicGPT - Start Music Generation": {
+      "main": [
+        [
+          {
+            "node": "Store MusicGPT IDs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Store MusicGPT IDs": {
+      "main": [
+        [
+          {
+            "node": "Google Sheets - Append MusicGPT IDs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Sheets - Append MusicGPT IDs": {
+      "main": [
+        [
+          {
+            "node": "Poll MusicGPT and Download MP3s",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Poll MusicGPT and Download MP3s": {
+      "main": [
+        [
+          {
+            "node": "Create metadata.json",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create metadata.json": {
+      "main": [
+        [
+          {
+            "node": "Save metadata.json",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save metadata.json": {
+      "main": [
+        [
+          {
+            "node": "Google Sheets - Final Update",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Sheets - Final Update": {
+      "main": [
+        [
+          {
+            "node": "End",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "timezone": "Etc/UTC"
+  },
+  "staticData": null,
+  "pinData": {},
+  "versionId": "scheduled-ai-music-package-generator-v1",
+  "triggerCount": 1,
+  "tags": []
+}
