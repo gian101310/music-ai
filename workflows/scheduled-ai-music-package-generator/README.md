@@ -129,11 +129,11 @@ The repo also includes a Render-ready deployment:
 - [render/start.sh](</C:/Users/Admin/Documents/New project/render/start.sh>)
 - [workflow.render.json](</C:/Users/Admin/Documents/New project/workflows/scheduled-ai-music-package-generator/workflow.render.json>)
 
-The Render workflow uses:
+The Render workflow uses the free-tier-compatible path:
 
 ```text
-output_base_path=/data/ai-music-output
-N8N_USER_FOLDER=/data
+output_base_path=/tmp/ai-music-output
+N8N_USER_FOLDER=/tmp/n8n-user
 ```
 
 This is required because Render runs Linux containers, not Windows, so `D:\AI_Music_Output` is not available.
@@ -144,7 +144,14 @@ Recommended Render setup:
 2. In Render, choose **New -> Blueprint**.
 3. Connect the repo containing `render.yaml`.
 4. Deploy the Blueprint.
-5. In the Render service **Environment** tab, add secret values for:
+5. The Blueprint creates:
+
+```text
+scheduled-ai-music-n8n      free web service
+scheduled-ai-music-n8n-db   free Render Postgres database
+```
+
+6. In the Render service **Environment** tab, add secret values for:
 
 ```text
 OPENAI_API_KEY
@@ -153,18 +160,20 @@ SUPABASE_URL
 SUPABASE_SERVICE_ROLE_KEY
 ```
 
-6. After Render gives you a URL like `https://scheduled-ai-music-n8n.onrender.com`, set:
+7. After Render gives you a URL like `https://scheduled-ai-music-n8n.onrender.com`, set:
 
 ```text
 WEBHOOK_URL=https://scheduled-ai-music-n8n.onrender.com/
 ```
 
-7. Redeploy after setting `WEBHOOK_URL`.
-8. Open the Render URL, finish n8n owner setup, open the imported workflow, set `google_sheet_id`, connect Google Sheets OAuth, save, and run manually once.
+8. Redeploy after setting `WEBHOOK_URL`.
+9. Open the Render URL, finish n8n owner setup, open the imported workflow, set `google_sheet_id`, connect Google Sheets OAuth, save, and run manually once.
 
 Important Render notes:
 
-- The Blueprint uses a persistent disk mounted at `/data`; this keeps n8n data and generated music files across redeploys.
-- Persistent disks require a paid Render service instance.
+- This free-tier setup uses Render Postgres for n8n workflow data.
+- Render free web services spin down when idle, so scheduled workflows may not run reliably unless the service is awake.
+- Generated cover/MP3/SRT files are written to `/tmp/ai-music-output`, which is temporary and can disappear when the service restarts.
+- For production, use a paid persistent disk or add cloud storage for generated files.
 - Keep local testing on `localhost:5682`; use Render as the cloud production copy.
 - Do not commit `.env` files or real API keys.

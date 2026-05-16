@@ -55,7 +55,7 @@
             {
               "id": "output_base_path",
               "name": "output_base_path",
-              "value": "/data/ai-music-output",
+              "value": "/tmp/ai-music-output",
               "type": "string"
             },
             {

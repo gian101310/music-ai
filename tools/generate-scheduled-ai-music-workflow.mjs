@@ -672,7 +672,7 @@ console.log(`Generated ${outputPath}`);
 const renderWorkflow = JSON.parse(JSON.stringify(workflow));
 const renderConfig = renderWorkflow.nodes.find((n) => n.name === 'Config');
 const outputBasePath = renderConfig.parameters.assignments.assignments.find((a) => a.name === 'output_base_path');
-outputBasePath.value = '/data/ai-music-output';
+outputBasePath.value = '/tmp/ai-music-output';
 renderWorkflow.settings.timezone = 'Etc/UTC';
 writeFileSync(renderOutputPath, JSON.stringify(renderWorkflow, null, 2) + '\n', 'utf8');
 console.log(`Generated ${renderOutputPath}`);
