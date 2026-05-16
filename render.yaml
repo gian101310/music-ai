@@ -4,8 +4,6 @@ services:
     runtime: docker
     plan: free
     envVars:
-      - key: PORT
-        value: "5678"
       - key: N8N_USER_FOLDER
         value: /tmp/n8n-user
       - key: N8N_RUNNERS_BROKER_PORT
@@ -24,10 +22,26 @@ services:
         generateValue: true
       - key: DB_TYPE
         value: postgresdb
-      - key: DATABASE_URL
+      - key: DB_POSTGRESDB_HOST
         fromDatabase:
           name: scheduled-ai-music-n8n-db
-          property: connectionString
+          property: host
+      - key: DB_POSTGRESDB_PORT
+        fromDatabase:
+          name: scheduled-ai-music-n8n-db
+          property: port
+      - key: DB_POSTGRESDB_DATABASE
+        fromDatabase:
+          name: scheduled-ai-music-n8n-db
+          property: database
+      - key: DB_POSTGRESDB_USER
+        fromDatabase:
+          name: scheduled-ai-music-n8n-db
+          property: user
+      - key: DB_POSTGRESDB_PASSWORD
+        fromDatabase:
+          name: scheduled-ai-music-n8n-db
+          property: password
       - key: OPENAI_API_KEY
         sync: false
       - key: MUSICGPT_API_KEY

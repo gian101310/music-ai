@@ -8,10 +8,9 @@ RUN mkdir -p /opt/scheduled-ai-music /data/ai-music-output \
 
 COPY --chown=node:node workflows/scheduled-ai-music-package-generator/workflow.render.json /opt/scheduled-ai-music/workflow.json
 COPY --chown=node:node render/start.sh /opt/scheduled-ai-music/start.sh
-COPY --chown=node:node render/start.js /opt/scheduled-ai-music/start.js
 
-RUN chmod +x /opt/scheduled-ai-music/start.sh /opt/scheduled-ai-music/start.js
+RUN chmod +x /opt/scheduled-ai-music/start.sh
 
 USER node
 
-CMD ["node", "/opt/scheduled-ai-music/start.js"]
+CMD ["/opt/scheduled-ai-music/start.sh"]
