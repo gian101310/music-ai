@@ -13,4 +13,4 @@ RUN chmod +x /opt/scheduled-ai-music/start.sh
 
 USER node
 
-CMD ["/opt/scheduled-ai-music/start.sh"]
+ENTRYPOINT ["/opt/scheduled-ai-music/start.sh"]
