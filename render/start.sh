@@ -9,6 +9,7 @@ export N8N_HOST="${N8N_HOST:-0.0.0.0}"
 export GENERIC_TIMEZONE="${GENERIC_TIMEZONE:-Etc/UTC}"
 export TZ="${TZ:-Etc/UTC}"
 export NODE_FUNCTION_ALLOW_BUILTIN="${NODE_FUNCTION_ALLOW_BUILTIN:-fs,path,crypto}"
+export N8N_BLOCK_ENV_ACCESS_IN_NODE="${N8N_BLOCK_ENV_ACCESS_IN_NODE:-false}"
 
 mkdir -p "$N8N_USER_FOLDER/.n8n" /data/ai-music-output
 

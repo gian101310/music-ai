@@ -20,6 +20,8 @@ services:
         value: Etc/UTC
       - key: NODE_FUNCTION_ALLOW_BUILTIN
         value: fs,path,crypto
+      - key: N8N_BLOCK_ENV_ACCESS_IN_NODE
+        value: "false"
       - key: N8N_ENCRYPTION_KEY
         generateValue: true
       - key: DB_TYPE
